@@ -1378,6 +1378,7 @@ ScatterEstimation::create_multiplicative_binnorm_sptr()
         {
           warning("ScatterEstimation: no normalisation data set. This would only be appropriate for simple simulations.");
           this->norm_3d_sptr = this->atten_norm_3d_sptr;
+          this->multiplicative_binnorm_sptr = this->atten_norm_3d_sptr;
         }
       else
         {

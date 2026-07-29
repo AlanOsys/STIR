@@ -655,7 +655,7 @@ LmToProjData::process_data()
     if (lm_data_ptr->has_delayeds() == false && store_delayeds == true)
       {
         warning("This list mode data does not seem to have delayed events.\n"
-                "Setting store_delayeds to false.");
+                "Setting store_delayeds to false. Update?");
         store_delayeds = false;
       }
   }

@@ -583,12 +583,11 @@ PETSIRDInfo::PETSIRDInfo(const petsird::Header& header, std::string scanner_geom
 float
 PETSIRDInfo::get_detection_efficiency_for_bin(const stir::DetectionPositionPair<>& dp) const
 {
-  const auto& detection_bin_efficiencies = petsird_scanner_info_sptr->detection_efficiencies.detection_bin_efficiencies;
-
-  if (!detection_bin_efficiencies)
-    {
-      return 1.f; // no efficiencies available
-    }
+  if (!petsird_scanner_info_sptr->detection_efficiencies.detection_bin_efficiencies
+    && !petsird_scanner_info_sptr->detection_efficiencies.module_pair_efficiencies_vectors)
+  {
+    return 1.f; // no efficiencies available in either representation
+  }
 
   DetectionPosition<> temp_dp1;
   DetectionPosition<> temp_dp2;

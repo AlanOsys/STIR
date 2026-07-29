@@ -33,9 +33,9 @@ CListModeDataPETSIRD::CListModeDataPETSIRD(const std::string& listmode_filename,
   else
     current_lm_data_ptr.reset(new petsird::binary::PETSIRDReader(listmode_filename));
 
-  m_has_delayeds = header.scanner.delayed_events_are_stored;
-
   current_lm_data_ptr->ReadHeader(header);
+
+  m_has_delayeds = header.scanner.delayed_events_are_stored;
 
   // Get the first TimeBlock
   if (!current_lm_data_ptr->ReadTimeBlocks(curr_time_block))
@@ -75,9 +75,6 @@ CListModeDataPETSIRD::CListModeDataPETSIRD(const std::string& listmode_filename,
 Succeeded
 CListModeDataPETSIRD::open_lm_file() const
 {
-  // current_lm_data_ptr.reset(new petsird::hdf5::PETSIRDReader(listmode_filename));
-  if (!current_lm_data_ptr->ReadTimeBlocks(curr_time_block))
-    return Succeeded::no;
   curr_event_block = std::get<petsird::EventTimeBlock>(curr_time_block);
   return Succeeded::yes;
 }
@@ -95,11 +92,27 @@ CListModeDataPETSIRD::get_next_record(CListRecord& record_of_general_type) const
   auto& record = dynamic_cast<CListRecordPETSIRD&>(record_of_general_type);
   const auto& prompt_list = curr_event_block.prompt_events.at(0).at(0); // TODO: support multiple pairs of modules.
   const auto& delayed_list = m_has_delayeds ? curr_event_block.delayed_events.at(0).at(0) : prompt_list;
-
   const auto& event_list = curr_is_prompt ? prompt_list : delayed_list;
 
+  if (event_list.size() == 0 && m_has_delayeds && curr_is_prompt)
+    {
+      // no prompts this time block, so let's try delayeds
+      curr_is_prompt = false;
+      curr_event_in_event_block = 0;
+      return get_next_record(record);
+    }
   if (event_list.size() == 0)
-    return Succeeded::no;
+    {
+      // no events, so read next Time block
+      if (!current_lm_data_ptr->ReadTimeBlocks(curr_time_block))
+        {
+          current_lm_data_ptr->Close();
+          return Succeeded::no;
+        }
+      ++m_time_block_index;
+      curr_event_block = std::get<petsird::EventTimeBlock>(curr_time_block);
+      return get_next_record(record);
+    }
 
   auto event = event_list.at(curr_event_in_event_block);
 
@@ -108,6 +121,7 @@ CListModeDataPETSIRD::get_next_record(CListRecord& record_of_general_type) const
     {
       return Succeeded::no;
     }
+  assert(current_is_prompt == record.event().is_prompt());
 
   ++curr_event_in_event_block;
 
@@ -265,31 +279,17 @@ CListModeDataPETSIRD::set_get_position(const SavedPosition& pos)
 Succeeded
 CListModeDataPETSIRD::reset()
 {
-  /* \todo Not sure if this is the best way to reset the reader.
-  It ensures we are in a clean state, but it might be slow if the file is large and/or on a slow disk.
-  */
-  // if (current_lm_data_ptr)
-  //   {
-  //     try
-  //       {
-  //         current_lm_data_ptr->Close();
-  //       }
-  //     catch (...)
-  //       {
-  //         // If Close throws, treat as failure (or swallow if you must)
-  //         return Succeeded::no;
-  //       }
-  //   }
-
   if (use_hdf5)
     current_lm_data_ptr.reset(new petsird::hdf5::PETSIRDReader(this->listmode_filename));
   else
     current_lm_data_ptr.reset(new petsird::binary::PETSIRDReader(this->listmode_filename));
 
+  petsird::Header header;
+  current_lm_data_ptr->ReadHeader(header);   // <-- ADD THIS LINE
+
   curr_event_in_event_block = 0;
   curr_is_prompt = true;
   m_time_block_index = 0;
-
   try
     {
       while (true)
@@ -297,9 +297,7 @@ CListModeDataPETSIRD::reset()
           info(format("Reading TimeBlock index {}", m_time_block_index), 2);
           if (!current_lm_data_ptr->ReadTimeBlocks(this->curr_time_block))
             return Succeeded::no;
-
           ++m_time_block_index;
-
           if (std::holds_alternative<petsird::EventTimeBlock>(this->curr_time_block))
             {
               this->curr_event_block = std::get<petsird::EventTimeBlock>(this->curr_time_block);
@@ -311,7 +309,6 @@ CListModeDataPETSIRD::reset()
     {
       return Succeeded::no;
     }
-
   return Succeeded::yes;
 }
 
